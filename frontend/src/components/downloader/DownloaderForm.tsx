@@ -141,8 +141,7 @@ export function DownloaderForm() {
           isLoading={state.status === "loading"}
           disabled={
             url.length === 0 ||
-            !clientLooksValid ||
-            !turnstileToken
+            !clientLooksValid
           }
         >
           Download
