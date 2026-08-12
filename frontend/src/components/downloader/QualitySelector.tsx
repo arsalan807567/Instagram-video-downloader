@@ -13,6 +13,8 @@ const BAR_COUNT: Record<NormalizedQuality["label"], number> = {
   "480p": 2,
   "720p": 3,
   "1080p": 4,
+  "1440p": 4,
+  "2160p": 4,
 };
 
 export function QualitySelector({

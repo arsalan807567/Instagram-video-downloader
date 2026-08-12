@@ -1,7 +1,7 @@
 export type NormalizedContentType = "video" | "reel" | "photo";
 
 export interface NormalizedQuality {
-  label: "360p" | "480p" | "720p" | "1080p";
+  label: "360p" | "480p" | "720p" | "1080p" | "1440p" | "2160p";
   width: number;
   height: number;
   fileSize?: string;

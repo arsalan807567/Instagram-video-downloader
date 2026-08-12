@@ -21,7 +21,7 @@ export type AnalyticsEvent =
   | "copy_url_clicked";
 
 type ContentType = "video" | "reel" | "photo" | "unknown";
-type DownloadQuality = "360p" | "480p" | "720p" | "1080p" | "unknown";
+type DownloadQuality = "360p" | "480p" | "720p" | "1080p" | "1440p" | "2160p" | "unknown";
 type Result = "success" | "failure";
 type FailureReason =
   | "invalid_url"
