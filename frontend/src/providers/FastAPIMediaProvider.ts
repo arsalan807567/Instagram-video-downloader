@@ -8,115 +8,142 @@ const FASTAPI_URL =
   process.env.FASTAPI_URL ??
   "https://instagram-video-downloader-y1cb.onrender.com";
 
-type FastAPIFormat = {
-  format_id?: string;
-  ext?: string;
-  width?: number;
-  height?: number;
-  filesize?: number;
-  filesize_approx?: number;
-  url?: string;
+type FastAPIMediaResponse = {
+  success: boolean;
+  type?: "video" | "reel" | "photo";
+  thumbnail?: string;
+  duration?: number | null;
+  qualities?: Array<{
+    label: string;
+    width: number;
+    height: number;
+    format_id: string;
+    fileSize?: string | null;
+  }>;
+  detail?: string;
 };
 
-function formatFileSize(bytes?: number): string | undefined {
-  if (!bytes || bytes <= 0) return undefined;
+const SUPPORTED_LABELS = [
+  "360p",
+  "480p",
+  "720p",
+  "1080p",
+  "1440p",
+  "2160p",
+] as const;
 
-  const mb = bytes / (1024 * 1024);
+type QualityLabel = (typeof SUPPORTED_LABELS)[number];
 
-  if (mb < 1) {
-    return `${Math.round(bytes / 1024)} KB`;
-  }
-
-  return `${mb.toFixed(1)} MB`;
-}
-
-function normalizeQuality(
-  format: FastAPIFormat,
-  normalizedUrl: string,
-): NormalizedQuality | null {
-  const height = format.height;
-
-  if (!height || !format.width) {
-    return null;
-  }
-
-  const supportedHeights = [360, 480, 720, 1080];
-
-  const closestHeight = supportedHeights.reduce((previous, current) =>
-    Math.abs(current - height) < Math.abs(previous - height)
-      ? current
-      : previous,
+function isQualityLabel(
+  value: string,
+): value is QualityLabel {
+  return SUPPORTED_LABELS.includes(
+    value as QualityLabel,
   );
-
-  const downloadUrl =
-    `/api/download?url=${encodeURIComponent(normalizedUrl)}&quality=${closestHeight}`;
-
-  return {
-    label: `${closestHeight}p` as "360p" | "480p" | "720p" | "1080p",
-    width: format.width,
-    height: closestHeight,
-    fileSize: formatFileSize(
-      format.filesize ?? format.filesize_approx,
-    ),
-    downloadUrl,
-  };
 }
 
 export class FastAPIMediaProvider implements MediaProvider {
   canHandle(normalizedUrl: string): boolean {
-    return normalizedUrl.includes("instagram.com");
+    try {
+      const parsed = new URL(normalizedUrl);
+
+      return (
+        parsed.hostname === "instagram.com" ||
+        parsed.hostname.endsWith(".instagram.com")
+      );
+    } catch {
+      return false;
+    }
   }
 
-  async getMedia(normalizedUrl: string): Promise<MediaResult> {
+  async getMedia(
+    normalizedUrl: string,
+  ): Promise<MediaResult> {
     try {
-      /*
-       * The FastAPI service currently downloads the video directly.
-       *
-       * The frontend API proxy handles the actual download.
-       *
-       * We expose the quality choices here so the UI can show
-       * multiple options.
-       */
+      const mediaUrl =
+        `${FASTAPI_URL}/api/media?url=` +
+        encodeURIComponent(normalizedUrl);
 
-      const qualities: NormalizedQuality[] = [
-        {
-          label: "360p",
-          width: 640,
-          height: 360,
-          downloadUrl:
-            `/api/download?url=${encodeURIComponent(normalizedUrl)}&quality=360`,
-        },
-        {
-          label: "480p",
-          width: 854,
-          height: 480,
-          downloadUrl:
-            `/api/download?url=${encodeURIComponent(normalizedUrl)}&quality=480`,
-        },
-        {
-          label: "720p",
-          width: 1280,
-          height: 720,
-          downloadUrl:
-            `/api/download?url=${encodeURIComponent(normalizedUrl)}&quality=720`,
-        },
-        {
-          label: "1080p",
-          width: 1920,
-          height: 1080,
-          downloadUrl:
-            `/api/download?url=${encodeURIComponent(normalizedUrl)}&quality=1080`,
-        },
-      ];
+      const response = await fetch(mediaUrl, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        console.error(
+          "FastAPI media error:",
+          response.status,
+          await response.text(),
+        );
+
+        return {
+          success: false,
+          code: "media_unavailable",
+          message:
+            "Unable to retrieve this Instagram video.",
+        };
+      }
+
+      const data =
+        (await response.json()) as FastAPIMediaResponse;
+
+      if (
+        !data.success ||
+        !data.qualities ||
+        data.qualities.length === 0
+      ) {
+        return {
+          success: false,
+          code: "media_unavailable",
+          message:
+            "No downloadable video qualities were found.",
+        };
+      }
+
+      const qualities: NormalizedQuality[] =
+        data.qualities
+          .filter((quality) =>
+            isQualityLabel(quality.label),
+          )
+          .map((quality) => ({
+            label: quality.label as QualityLabel,
+            width: quality.width,
+            height: quality.height,
+            fileSize:
+              quality.fileSize ?? undefined,
+
+            // IMPORTANT:
+            // FastAPI expects format_id, not quality.
+            downloadUrl:
+              `/api/download?url=${encodeURIComponent(
+                normalizedUrl,
+              )}&format_id=${encodeURIComponent(
+                quality.format_id,
+              )}`,
+          }));
+
+      if (qualities.length === 0) {
+        return {
+          success: false,
+          code: "media_unavailable",
+          message:
+            "No supported video qualities were found.",
+        };
+      }
 
       return {
         success: true,
-        type: "reel",
-        thumbnail: "",
+        type: data.type ?? "reel",
+        thumbnail: data.thumbnail ?? "",
+        duration:
+          data.duration ?? undefined,
         qualities,
       };
     } catch (error) {
-      console.error("FastAPI provider error:", error);
+      console.error(
+        "FastAPI provider error:",
+        error,
+      );
 
       return {
         success: false,
