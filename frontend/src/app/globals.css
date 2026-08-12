@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+/*
+  DESIGN TOKENS
+  Named after the product's actual differentiator: honest signal strength.
+  We never fabricate a quality that isn't there, so the visual language
+  borrows from signal/reception bars rather than a generic gradient hero.
+
+  Ink      #10151C  near-black navy, not pure black
+  Paper    #FFFFFF  primary background
+  Mist     #F3F6FB  cool section background (blue-tinted, not gray)
+  Line     #E3E9F2  hairline borders
+  Signal   #1857D6  primary accent - confident cobalt blue
+  Signal-2 #0E3F9E  pressed / deep accent
+  Good     #17A66B  success (download succeeded)
+  Warn     #C4780A  caution (rate limit, retry)
+  Bad      #D8425A  error (failure states)
+*/
+
+:root {
+  --ink: #10151c;
+  --paper: #ffffff;
+  --mist: #f3f6fb;
+  --line: #e3e9f2;
+  --signal: #1857d6;
+  --signal-2: #0e3f9e;
+  --good: #17a66b;
+  --warn: #c4780a;
+  --bad: #d8425a;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-mist: var(--mist);
+  --color-line: var(--line);
+  --color-signal: var(--signal);
+  --color-signal-2: var(--signal-2);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+
+  --font-display: var(--font-space-grotesk);
+  --font-body: var(--font-inter);
+  --font-mono: var(--font-plex-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Signal bars - the signature motif, reused as brand mark and as the
+   quality indicator so the metaphor is literal, not decorative. */
+.signal-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 16px;
+}
+.signal-bars span {
+  display: block;
+  width: 4px;
+  background: currentColor;
+  border-radius: 1px;
+}
+.signal-bars span:nth-child(1) {
+  height: 40%;
+}
+.signal-bars span:nth-child(2) {
+  height: 65%;
+}
+.signal-bars span:nth-child(3) {
+  height: 85%;
+}
+.signal-bars span:nth-child(4) {
+  height: 100%;
+}
