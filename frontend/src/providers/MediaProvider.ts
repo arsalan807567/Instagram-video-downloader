@@ -5,6 +5,7 @@ export interface NormalizedQuality {
   width: number;
   height: number;
   fileSize?: string;
+  format_id?: string;
   downloadUrl: string;
 }
 

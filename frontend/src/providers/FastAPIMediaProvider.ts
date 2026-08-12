@@ -80,9 +80,12 @@ export class FastAPIMediaProvider implements MediaProvider {
             width: quality.width!,
             height: quality.height!,
             fileSize: quality.fileSize ?? undefined,
+            format_id: quality.format_id,
             downloadUrl:
               `/api/download?url=${encodeURIComponent(normalizedUrl)}` +
-              `&quality=${encodeURIComponent(label)}`,
+              (quality.format_id
+                ? `&format_id=${encodeURIComponent(quality.format_id)}`
+                : ""),
           };
         })
         .sort((a, b) => a.height - b.height);
