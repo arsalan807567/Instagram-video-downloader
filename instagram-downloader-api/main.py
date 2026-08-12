@@ -456,6 +456,23 @@ async def download_video(
 
 
 # ============================================================
+# GET VIDEO DOWNLOAD
+# ============================================================
+
+@app.get("/api/download")
+async def download_video_get(url: HttpUrl):
+    """
+    Browser-friendly download endpoint.
+
+    The URL is supplied as a query parameter so the frontend can
+    provide a direct download link.
+    """
+    return await download_video(
+        DownloadRequest(url=url)
+    )
+
+
+# ============================================================
 # LOCAL DEVELOPMENT
 # ============================================================
 
