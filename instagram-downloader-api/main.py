@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import yt_dlp
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, HttpUrl
@@ -19,20 +19,15 @@ from starlette.background import BackgroundTask
 # ============================================================
 
 APP_NAME = "Instagram Video Downloader API"
-APP_VERSION = "1.0.0"
+APP_VERSION = "2.0.0"
 
-# Maximum allowed downloaded file size.
 MAX_FILE_SIZE_MB = 500
 
-# Frontend URL.
-# Render/Vercel will provide the production value through
-# an environment variable.
 FRONTEND_URL = os.getenv(
     "FRONTEND_URL",
-    "https://instagram-downloader.arslankhan807567.workers.dev"
+    "https://instagram-video-downloader-iota-six.vercel.app",
 )
 
-# Only allow Instagram domains.
 ALLOWED_INSTAGRAM_HOSTS = {
     "instagram.com",
     "www.instagram.com",
@@ -40,16 +35,13 @@ ALLOWED_INSTAGRAM_HOSTS = {
 
 
 # ============================================================
-# FASTAPI APPLICATION
+# FASTAPI
 # ============================================================
 
 app = FastAPI(
     title=APP_NAME,
     version=APP_VERSION,
-    description=(
-        "API for downloading publicly accessible "
-        "Instagram videos."
-    ),
+    description="API for downloading publicly accessible Instagram videos.",
 )
 
 
@@ -59,15 +51,17 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
-    allow_credentials=True,
+    allow_origins=[
+        FRONTEND_URL,
+    ],
+    allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
 
 # ============================================================
-# REQUEST SCHEMA
+# REQUEST MODELS
 # ============================================================
 
 class DownloadRequest(BaseModel):
@@ -75,42 +69,32 @@ class DownloadRequest(BaseModel):
 
 
 # ============================================================
-# UTILITY FUNCTIONS
+# URL VALIDATION
 # ============================================================
 
 def validate_instagram_url(url: str) -> None:
-    """
-    Validate that the supplied URL belongs to Instagram.
-    """
-
     parsed_url = urlparse(url)
 
-    # Make sure HTTP/HTTPS is being used.
     if parsed_url.scheme not in {"http", "https"}:
         raise HTTPException(
             status_code=400,
             detail="Only HTTP and HTTPS URLs are supported.",
         )
 
-    hostname = (
-        parsed_url.hostname or ""
-    ).lower()
+    hostname = (parsed_url.hostname or "").lower()
 
     if hostname not in ALLOWED_INSTAGRAM_HOSTS:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Invalid URL. Please provide a valid "
-                "Instagram URL."
-            ),
+            detail="Invalid URL. Please provide a valid Instagram URL.",
         )
 
 
-def cleanup_directory(directory: str) -> None:
-    """
-    Remove temporary files after the response is complete.
-    """
+# ============================================================
+# TEMP FILE CLEANUP
+# ============================================================
 
+def cleanup_directory(directory: str) -> None:
     try:
         shutil.rmtree(
             directory,
@@ -120,11 +104,11 @@ def cleanup_directory(directory: str) -> None:
         pass
 
 
-def sanitize_filename(filename: str) -> str:
-    """
-    Convert a video title into a safe filename.
-    """
+# ============================================================
+# FILENAME
+# ============================================================
 
+def sanitize_filename(filename: str) -> str:
     filename = re.sub(
         r"[^\w\s.-]",
         "",
@@ -145,11 +129,11 @@ def sanitize_filename(filename: str) -> str:
     return filename[:100]
 
 
-def find_video_file(directory: str) -> Path | None:
-    """
-    Find the downloaded video inside the temporary directory.
-    """
+# ============================================================
+# VIDEO FILE FINDER
+# ============================================================
 
+def find_video_file(directory: str) -> Path | None:
     allowed_extensions = {
         ".mp4",
         ".mkv",
@@ -169,11 +153,161 @@ def find_video_file(directory: str) -> Path | None:
     if not video_files:
         return None
 
-    # Return the largest video file.
-    # This helps when yt-dlp creates multiple files.
     return max(
         video_files,
         key=lambda file: file.stat().st_size,
+    )
+
+
+# ============================================================
+# YT-DLP INFORMATION
+# ============================================================
+
+def extract_media_info(instagram_url: str) -> dict:
+    """
+    Extract metadata without downloading the video.
+    """
+
+    ydl_options = {
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "skip_download": True,
+        "extract_flat": False,
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_options) as ydl:
+            info = ydl.extract_info(
+                instagram_url,
+                download=False,
+            )
+
+        if not info:
+            raise HTTPException(
+                status_code=404,
+                detail="Unable to retrieve Instagram media.",
+            )
+
+        return info
+
+    except yt_dlp.utils.DownloadError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Unable to retrieve this Instagram video. "
+                "Make sure it is publicly accessible."
+            ),
+        ) from error
+
+
+# ============================================================
+# QUALITY NORMALIZATION
+# ============================================================
+
+def get_available_qualities(info: dict) -> list[dict]:
+    """
+    Convert yt-dlp formats into a small list of usable
+    quality options.
+
+    Only formats actually returned by Instagram/yt-dlp
+    are exposed.
+    """
+
+    formats = info.get("formats") or []
+
+    candidates = []
+
+    for fmt in formats:
+        height = fmt.get("height")
+        width = fmt.get("width")
+        format_id = fmt.get("format_id")
+
+        if not height or not width or not format_id:
+            continue
+
+        # Ignore extremely small/odd formats.
+        if height < 240:
+            continue
+
+        # We want video formats.
+        if fmt.get("vcodec") in (None, "none"):
+            continue
+
+        candidates.append(
+            {
+                "format_id": str(format_id),
+                "height": int(height),
+                "width": int(width),
+                "ext": fmt.get("ext") or "mp4",
+                "fps": fmt.get("fps"),
+                "filesize": fmt.get("filesize")
+                or fmt.get("filesize_approx"),
+            }
+        )
+
+    # Keep only the best format for each height.
+    best_by_height: dict[int, dict] = {}
+
+    for item in candidates:
+        height = item["height"]
+
+        existing = best_by_height.get(height)
+
+        if existing is None:
+            best_by_height[height] = item
+            continue
+
+        existing_filesize = existing.get("filesize") or 0
+        item_filesize = item.get("filesize") or 0
+
+        if item_filesize > existing_filesize:
+            best_by_height[height] = item
+
+    qualities = []
+
+    for height, item in sorted(
+        best_by_height.items(),
+        key=lambda pair: pair[0],
+    ):
+        if height >= 2160:
+            label = "2160p"
+        elif height >= 1440:
+            label = "1440p"
+        elif height >= 1080:
+            label = "1080p"
+        elif height >= 720:
+            label = "720p"
+        elif height >= 480:
+            label = "480p"
+        else:
+            label = "360p"
+
+        qualities.append(
+            {
+                "label": label,
+                "width": item["width"],
+                "height": height,
+                "format_id": item["format_id"],
+                "fileSize": (
+                    f"{round(item['filesize'] / (1024 * 1024), 1)} MB"
+                    if item.get("filesize")
+                    else None
+                ),
+            }
+        )
+
+    # Remove duplicate labels.
+    unique = {}
+
+    for quality in qualities:
+        unique[quality["label"]] = quality
+
+    return list(
+        sorted(
+            unique.values(),
+            key=lambda item: item["height"],
+        )
     )
 
 
@@ -183,10 +317,6 @@ def find_video_file(directory: str) -> Path | None:
 
 @app.get("/")
 async def root():
-    """
-    API information endpoint.
-    """
-
     return {
         "name": APP_NAME,
         "version": APP_VERSION,
@@ -196,12 +326,66 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """
-    Health check used by Render or other infrastructure.
-    """
-
     return {
         "status": "healthy",
+    }
+
+
+# ============================================================
+# MEDIA INFORMATION
+# ============================================================
+
+@app.get("/api/media")
+async def media_info(
+    url: HttpUrl,
+):
+    """
+    Retrieve metadata and available video qualities
+    without downloading the video.
+    """
+
+    instagram_url = str(url)
+
+    validate_instagram_url(
+        instagram_url
+    )
+
+    info = extract_media_info(
+        instagram_url
+    )
+
+    qualities = get_available_qualities(
+        info
+    )
+
+    if not qualities:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "No downloadable video formats "
+                "were found for this Instagram post."
+            ),
+        )
+
+    thumbnail = info.get("thumbnail") or ""
+
+    duration = info.get("duration")
+
+    media_type = "reel"
+
+    webpage_url = info.get("webpage_url") or instagram_url
+
+    if "/reel/" in webpage_url:
+        media_type = "reel"
+    elif "/p/" in webpage_url:
+        media_type = "video"
+
+    return {
+        "success": True,
+        "type": media_type,
+        "thumbnail": thumbnail,
+        "duration": duration,
+        "qualities": qualities,
     }
 
 
@@ -212,29 +396,50 @@ async def health():
 @app.post("/api/download")
 async def download_video(
     request: DownloadRequest,
+    format_id: str | None = Query(
+        default=None,
+        max_length=100,
+    ),
 ):
     """
     Download a publicly accessible Instagram video.
 
-    The video is downloaded to a temporary directory and
-    returned directly to the client.
-
     Temporary files are automatically deleted after
-    the response is completed.
+    the response has completed.
     """
 
     instagram_url = str(request.url)
-
-    # --------------------------------------------------------
-    # Validate URL
-    # --------------------------------------------------------
 
     validate_instagram_url(
         instagram_url
     )
 
     # --------------------------------------------------------
-    # Create temporary directory
+    # Retrieve metadata first
+    # --------------------------------------------------------
+
+    info = extract_media_info(
+        instagram_url
+    )
+
+    formats = info.get("formats") or []
+
+    selected_format = None
+
+    if format_id:
+        for fmt in formats:
+            if str(fmt.get("format_id")) == format_id:
+                selected_format = fmt
+                break
+
+        if selected_format is None:
+            raise HTTPException(
+                status_code=400,
+                detail="The requested video quality is unavailable.",
+            )
+
+    # --------------------------------------------------------
+    # Temporary directory
     # --------------------------------------------------------
 
     temporary_directory = tempfile.mkdtemp(
@@ -247,50 +452,50 @@ async def download_video(
     )
 
     # --------------------------------------------------------
-    # yt-dlp configuration
+    # Format selection
     # --------------------------------------------------------
 
-    ydl_options = {
-        # Prefer MP4 where available.
-        #
-        # If separate video/audio streams are returned,
-        # FFmpeg will merge them.
-        "format": (
+    if selected_format:
+        selected_format_id = str(
+            selected_format.get("format_id")
+        )
+
+        format_selector = (
+            f"{selected_format_id}+bestaudio/"
+            f"{selected_format_id}/best"
+        )
+    else:
+        format_selector = (
             "best[ext=mp4][height<=2160]/"
             "bestvideo[height<=2160]+bestaudio/"
             "best"
-        ),
+        )
 
-        # Output filename.
+    ydl_options = {
+        "format": format_selector,
+
         "outtmpl": output_template,
 
-        # Convert/merge into MP4.
         "merge_output_format": "mp4",
 
-        # Never download playlists.
         "noplaylist": True,
 
-        # We only want the video.
         "writesubtitles": False,
+
         "writethumbnail": False,
 
-        # Reduce unnecessary console output.
         "quiet": True,
+
         "no_warnings": True,
 
-        # Network retry settings.
         "retries": 3,
-        "fragment_retries": 3,
 
-        # Do not use browser cookies or authentication.
-        # This backend is intended for publicly accessible
-        # content.
+        "fragment_retries": 3,
     }
 
     try:
-
         # ----------------------------------------------------
-        # Download video
+        # Download
         # ----------------------------------------------------
 
         with yt_dlp.YoutubeDL(
@@ -305,10 +510,7 @@ async def download_video(
             if not info:
                 raise HTTPException(
                     status_code=404,
-                    detail=(
-                        "Unable to retrieve the "
-                        "video information."
-                    ),
+                    detail="Unable to retrieve the video.",
                 )
 
             video_title = (
@@ -325,21 +527,17 @@ async def download_video(
         )
 
         if video_file is None:
-
             cleanup_directory(
                 temporary_directory
             )
 
             raise HTTPException(
                 status_code=404,
-                detail=(
-                    "The video could not be "
-                    "generated."
-                ),
+                detail="The video could not be generated.",
             )
 
         # ----------------------------------------------------
-        # Check file size
+        # Size protection
         # ----------------------------------------------------
 
         file_size_mb = (
@@ -348,7 +546,6 @@ async def download_video(
         )
 
         if file_size_mb > MAX_FILE_SIZE_MB:
-
             cleanup_directory(
                 temporary_directory
             )
@@ -362,7 +559,7 @@ async def download_video(
             )
 
         # ----------------------------------------------------
-        # Create safe filename
+        # Filename
         # ----------------------------------------------------
 
         safe_filename = sanitize_filename(
@@ -375,16 +572,16 @@ async def download_video(
             safe_filename += ".mp4"
 
         # ----------------------------------------------------
-        # Return video
+        # Response
         # ----------------------------------------------------
 
         return FileResponse(
             path=str(video_file),
+
             media_type="video/mp4",
+
             filename=safe_filename,
 
-            # Delete temporary files after
-            # FastAPI finishes sending the file.
             background=BackgroundTask(
                 cleanup_directory,
                 temporary_directory,
@@ -402,50 +599,32 @@ async def download_video(
             },
         )
 
-    # --------------------------------------------------------
-    # yt-dlp errors
-    # --------------------------------------------------------
-
     except yt_dlp.utils.DownloadError as error:
-
         cleanup_directory(
             temporary_directory
         )
 
-        # Do not expose internal yt-dlp errors.
         raise HTTPException(
             status_code=422,
             detail=(
-                "Unable to download this Instagram "
-                "video. Make sure the URL points to "
-                "publicly accessible content and that "
-                "you have permission to download it."
+                "Unable to download this Instagram video. "
+                "Make sure the URL points to publicly "
+                "accessible content."
             ),
         ) from error
 
-    # --------------------------------------------------------
-    # Expected FastAPI errors
-    # --------------------------------------------------------
-
     except HTTPException:
-
         cleanup_directory(
             temporary_directory
         )
 
         raise
 
-    # --------------------------------------------------------
-    # Unexpected errors
-    # --------------------------------------------------------
-
     except Exception as error:
-
         cleanup_directory(
             temporary_directory
         )
 
-        # Keep internal error details out of the API response.
         raise HTTPException(
             status_code=500,
             detail=(
@@ -456,19 +635,28 @@ async def download_video(
 
 
 # ============================================================
-# GET VIDEO DOWNLOAD
+# GET DOWNLOAD
 # ============================================================
 
 @app.get("/api/download")
-async def download_video_get(url: HttpUrl):
+async def download_video_get(
+    url: HttpUrl,
+    format_id: str | None = Query(
+        default=None,
+        max_length=100,
+    ),
+):
     """
     Browser-friendly download endpoint.
-
-    The URL is supplied as a query parameter so the frontend can
-    provide a direct download link.
     """
+
+    request = DownloadRequest(
+        url=url
+    )
+
     return await download_video(
-        DownloadRequest(url=url)
+        request=request,
+        format_id=format_id,
     )
 
 
@@ -477,7 +665,6 @@ async def download_video_get(url: HttpUrl):
 # ============================================================
 
 if __name__ == "__main__":
-
     import uvicorn
 
     port = int(
