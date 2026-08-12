@@ -154,6 +154,7 @@ export function DownloaderForm() {
           siteKey={
             process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!
           }
+          options={{ appearance: "interaction-only" }}
           onSuccess={(token) => {
             setTurnstileToken(token);
           }}
