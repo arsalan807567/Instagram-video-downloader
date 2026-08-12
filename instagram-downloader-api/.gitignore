@@ -1,1 +1,24 @@
+__pycache__/
+*.py[cod]
 
+.venv/
+venv/
+env/
+
+.env
+.env.*
+!.env.example
+
+.vscode/
+.idea/
+
+.DS_Store
+Thumbs.db
+
+downloads/
+*.mp4
+*.mov
+*.webm
+*.mkv
+
+*.log
