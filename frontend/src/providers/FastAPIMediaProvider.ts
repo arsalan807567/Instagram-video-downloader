@@ -8,126 +8,90 @@ const FASTAPI_URL =
   process.env.FASTAPI_URL ??
   "https://instagram-video-downloader-y1cb.onrender.com";
 
+type FastAPIQuality = {
+  label?: string;
+  width?: number;
+  height?: number;
+  fileSize?: string | null;
+  format_id?: string;
+};
+
 type FastAPIMediaResponse = {
-  success: boolean;
+  success?: boolean;
   type?: "video" | "reel" | "photo";
   thumbnail?: string;
   duration?: number | null;
-  qualities?: Array<{
-    label: string;
-    width: number;
-    height: number;
-    format_id: string;
-    fileSize?: string | null;
-  }>;
+  qualities?: FastAPIQuality[];
   detail?: string;
 };
 
-const SUPPORTED_LABELS = [
+const ALLOWED_QUALITIES = new Set([
   "360p",
   "480p",
   "720p",
   "1080p",
   "1440p",
   "2160p",
-] as const;
-
-type QualityLabel = (typeof SUPPORTED_LABELS)[number];
-
-function isQualityLabel(
-  value: string,
-): value is QualityLabel {
-  return SUPPORTED_LABELS.includes(
-    value as QualityLabel,
-  );
-}
+]);
 
 export class FastAPIMediaProvider implements MediaProvider {
   canHandle(normalizedUrl: string): boolean {
-    try {
-      const parsed = new URL(normalizedUrl);
-
-      return (
-        parsed.hostname === "instagram.com" ||
-        parsed.hostname.endsWith(".instagram.com")
-      );
-    } catch {
-      return false;
-    }
+    return normalizedUrl.includes("instagram.com");
   }
 
-  async getMedia(
-    normalizedUrl: string,
-  ): Promise<MediaResult> {
+  async getMedia(normalizedUrl: string): Promise<MediaResult> {
     try {
-      const mediaUrl =
+      const endpoint =
         `${FASTAPI_URL}/api/media?url=` +
         encodeURIComponent(normalizedUrl);
 
-      const response = await fetch(mediaUrl, {
+      const response = await fetch(endpoint, {
         method: "GET",
         cache: "no-store",
+        signal: AbortSignal.timeout(15000),
       });
-
-      if (!response.ok) {
-        console.error(
-          "FastAPI media error:",
-          response.status,
-          await response.text(),
-        );
-
-        return {
-          success: false,
-          code: "media_unavailable",
-          message:
-            "Unable to retrieve this Instagram video.",
-        };
-      }
 
       const data =
         (await response.json()) as FastAPIMediaResponse;
 
-      if (
-        !data.success ||
-        !data.qualities ||
-        data.qualities.length === 0
-      ) {
+      if (!response.ok || !data.success) {
         return {
           success: false,
           code: "media_unavailable",
           message:
-            "No downloadable video qualities were found.",
+            data.detail ??
+            "Unable to retrieve this Instagram media.",
         };
       }
 
-      const qualities: NormalizedQuality[] =
-        data.qualities
-          .filter((quality) =>
-            isQualityLabel(quality.label),
-          )
-          .map((quality) => ({
-            label: quality.label as QualityLabel,
-            width: quality.width,
-            height: quality.height,
-            fileSize:
-              quality.fileSize ?? undefined,
+      const qualities: NormalizedQuality[] = (data.qualities ?? [])
+        .filter(
+          (quality) =>
+            typeof quality.label === "string" &&
+            ALLOWED_QUALITIES.has(quality.label) &&
+            typeof quality.width === "number" &&
+            typeof quality.height === "number",
+        )
+        .map((quality) => {
+          const label = quality.label as NormalizedQuality["label"];
 
-            // IMPORTANT:
-            // FastAPI expects format_id, not quality.
+          return {
+            label,
+            width: quality.width!,
+            height: quality.height!,
+            fileSize: quality.fileSize ?? undefined,
             downloadUrl:
-              `/api/download?url=${encodeURIComponent(
-                normalizedUrl,
-              )}&format_id=${encodeURIComponent(
-                quality.format_id,
-              )}`,
-          }));
+              `/api/download?url=${encodeURIComponent(normalizedUrl)}` +
+              `&quality=${encodeURIComponent(label)}`,
+          };
+        })
+        .sort((a, b) => a.height - b.height);
 
       if (qualities.length === 0) {
         return {
           success: false,
           code: "media_unavailable",
-          message:
-            "No supported video qualities were found.",
+          message: "No downloadable video qualities were found.",
         };
       }
 
@@ -136,14 +100,13 @@ export class FastAPIMediaProvider implements MediaProvider {
         type: data.type ?? "reel",
         thumbnail: data.thumbnail ?? "",
         duration:
-          data.duration ?? undefined,
+          typeof data.duration === "number"
+            ? data.duration
+            : undefined,
         qualities,
       };
     } catch (error) {
-      console.error(
-        "FastAPI provider error:",
-        error,
-      );
+      console.error("FastAPI provider error:", error);
 
       return {
         success: false,
