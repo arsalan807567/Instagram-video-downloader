@@ -30,7 +30,7 @@ MAX_FILE_SIZE_MB = 500
 # an environment variable.
 FRONTEND_URL = os.getenv(
     "FRONTEND_URL",
-    "http://localhost:3000"
+    "https://instagram-downloader.arslankhan807567.workers.dev"
 )
 
 # Only allow Instagram domains.
