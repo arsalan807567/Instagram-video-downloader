@@ -10,7 +10,8 @@
   },
   "vars": {
     "NEXT_PUBLIC_APP_ENV": "production",
-    "MEDIA_PROVIDER": "mock",
+    "MEDIA_PROVIDER": "fastapi",
+    "FASTAPI_URL": "https://instagram-video-downloader-y1cb.onrender.com",
     "RATE_LIMIT_WINDOW_MS": "60000",
     "RATE_LIMIT_MAX_REQUESTS": "10",
     "MAX_REQUEST_BYTES": "2000",
