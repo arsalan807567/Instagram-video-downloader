@@ -26,18 +26,6 @@ export function DownloaderForm() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
 
-    if (!turnstileToken) {
-      setState({
-        status: "error",
-        result: {
-          success: false,
-          code: "provider_error",
-          message: "Please complete the security verification.",
-        },
-      });
-      return;
-    }
-
     setState({ status: "loading" });
 
     track("download_attempt", {
@@ -49,9 +37,8 @@ export function DownloaderForm() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Turnstile-Token": turnstileToken,
         },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url: url.trim() }),
       });
 
       const result: MediaResult = await response.json();
@@ -140,9 +127,9 @@ export function DownloaderForm() {
           size="lg"
           isLoading={state.status === "loading"}
           disabled={
-            url.length === 0 ||
-            !clientLooksValid
-          }
+          url.trim().length === 0 ||
+          !clientLooksValid
+        }
         >
           Download
         </Button>

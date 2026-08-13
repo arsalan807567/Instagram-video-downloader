@@ -6,9 +6,34 @@ export const metadata: Metadata = {
   alternates: { canonical: "/terms-of-service" },
 };
 
+const breadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "/",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Terms of Service",
+      item: "/terms-of-service",
+    },
+  ],
+};
+
 export default function TermsPage() {
   return (
     <article className="mx-auto max-w-2xl px-4 py-16 sm:px-6 sm:py-20">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbSchema),
+        }}
+      />
       <h1 className="text-4xl font-semibold tracking-tight text-ink">
         Terms of Service
       </h1>

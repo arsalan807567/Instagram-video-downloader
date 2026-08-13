@@ -8,9 +8,34 @@ export const metadata: Metadata = {
   alternates: { canonical: "/instagram-reels-downloader" },
 };
 
+const breadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "/",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Instagram Reels Downloader",
+      item: "/instagram-reels-downloader",
+    },
+  ],
+};
+
 export default function ReelsDownloaderPage() {
   return (
     <section className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbSchema),
+        }}
+      />
       <h1 className="text-4xl font-semibold tracking-tight text-ink">
         Instagram Reels Downloader
       </h1>

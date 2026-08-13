@@ -31,9 +31,64 @@ const steps = [
   },
 ];
 
+const howToSchema = {
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  name: "How to Download Instagram Videos",
+  description:
+    "Step-by-step instructions for downloading publicly accessible Instagram videos and Reels.",
+  totalTime: "PT2M",
+  tool: [
+    {
+      "@type": "HowToTool",
+      name: "Web browser",
+    },
+    {
+      "@type": "HowToTool",
+      name: "Instagram Video Downloader",
+    },
+  ],
+  step: steps.map((step) => ({
+    "@type": "HowToStep",
+    name: step.title,
+    text: step.body,
+  })),
+};
+
+const breadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "/",
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "How to Download Instagram Videos",
+      item: "/how-to-download-instagram-videos",
+    },
+  ],
+};
+
 export default function HowToPage() {
   return (
     <article className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbSchema),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(howToSchema),
+        }}
+      />
       <h1 className="text-4xl font-semibold tracking-tight text-ink">
         How to Download Instagram Videos
       </h1>

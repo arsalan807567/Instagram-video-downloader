@@ -2,7 +2,7 @@ import { validateInstagramUrl } from "@/lib/validation/url";
 import { getMediaProvider } from "@/providers";
 import { MediaResult } from "@/providers/MediaProvider";
 
-const PROVIDER_TIMEOUT_MS = Number(process.env.PROVIDER_TIMEOUT_MS ?? 10_000);
+const PROVIDER_TIMEOUT_MS = Number(process.env.PROVIDER_TIMEOUT_MS ?? 20_000);
 
 export async function resolveMedia(rawUrl: string): Promise<MediaResult> {
   const validation = validateInstagramUrl(rawUrl);

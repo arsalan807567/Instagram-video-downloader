@@ -13,15 +13,17 @@ export function Hero() {
             <span />
             <span />
           </span>
-          Only real, available qualities — never guessed
+          Real available video qualities — never guessed
         </div>
 
         <h1 className="text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
           Instagram Video Downloader
         </h1>
+
         <p className="mx-auto mt-4 max-w-xl text-lg text-ink/60">
-          Download publicly available Instagram videos online. Paste an
-          Instagram URL, choose your preferred quality, and download.
+          Download public Instagram videos and Reels online for free. Paste
+          an Instagram video URL, choose an available quality, and download
+          the video to your device without creating an account.
         </p>
 
         <div className="mx-auto mt-8 max-w-xl text-left">

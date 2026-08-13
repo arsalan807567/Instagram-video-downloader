@@ -28,30 +28,76 @@ const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://example.com";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ??
+      "https://instagram-video-downloader-iota-six.vercel.app",
+  ),
   title: {
-    default: "Instagram Video Downloader | Fast, Free Online Download",
+    default: "Instagram Video Downloader - Download Instagram Videos Free",
     template: "%s | Instagram Video Downloader",
   },
   description:
-    "Download supported public Instagram videos online. Paste a URL, choose an available quality, and download without creating an account.",
+    "Download public Instagram videos and Reels online for free. Paste an Instagram URL, choose the available video quality, and download without logging in.",
+  keywords: [
+    "instagram video downloader",
+    "instagram downloader",
+    "instagram reels downloader",
+    "download instagram videos",
+    "download instagram reels",
+    "instagram video download",
+  ],
+  applicationName: "Instagram Video Downloader",
+  category: "utilities",
+  alternates: {
+    canonical: "./",
+  },
   openGraph: {
     type: "website",
     siteName: "Instagram Video Downloader",
-    title: "Instagram Video Downloader | Fast, Free Online Download",
+    title: "Instagram Video Downloader - Download Instagram Videos Free",
     description:
-      "Download supported public Instagram videos online. Paste a URL, choose an available quality, and download without creating an account.",
+      "Download public Instagram videos and Reels online for free. No login required.",
+    locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Instagram Video Downloader",
+    title: "Instagram Video Downloader - Free Online Downloader",
     description:
-      "Download supported public Instagram videos online. No login required.",
+      "Download public Instagram videos and Reels online. No login required.",
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
   },
+};
+
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": `${siteUrl}/#website`,
+      url: siteUrl,
+      name: "Instagram Video Downloader",
+      description:
+        "Download public Instagram videos and Reels online for free.",
+      inLanguage: "en",
+    },
+    {
+      "@type": "Organization",
+      "@id": `${siteUrl}/#organization`,
+      name: "Instagram Video Downloader",
+      url: siteUrl,
+    },
+  ],
 };
 
 export default function RootLayout({
@@ -61,6 +107,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(structuredData),
+          }}
+        />
+      </head>
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} ${plexMono.variable} antialiased flex min-h-screen flex-col`}
       >

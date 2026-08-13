@@ -1,21 +1,23 @@
 const points = [
   {
-    title: "No account, ever",
-    description: "Use the downloader immediately. No sign-up, no password, no email.",
-  },
-  {
-    title: "Honest quality options",
+    title: "No account required",
     description:
-      "We only ever show resolutions that genuinely exist for that video - never a fabricated 1080p.",
+      "Download supported public Instagram videos and Reels without creating an account or entering your Instagram password.",
   },
   {
-    title: "Nothing stored",
+    title: "Use the available quality",
     description:
-      "Videos stream straight to your browser. We don't keep a copy on our servers.",
+      "Choose from the video resolutions actually available for the content instead of relying on artificially upscaled quality.",
   },
   {
-    title: "Built for mobile",
-    description: "Large tap targets and a layout that works on any screen size.",
+    title: "Simple online downloader",
+    description:
+      "Paste an Instagram URL, check the available options, and download directly through your browser.",
+  },
+  {
+    title: "Works on mobile and desktop",
+    description:
+      "Use the downloader from a modern browser on iPhone, Android, Windows, Mac, or other supported devices.",
   },
 ];
 
@@ -24,8 +26,9 @@ export function WhyUse() {
     <section className="py-16 sm:py-20">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
         <h2 className="text-center text-3xl font-semibold text-ink">
-          Why use this tool
+          Why use this Instagram downloader?
         </h2>
+
         <div className="mt-10 grid gap-6 sm:grid-cols-2">
           {points.map((point) => (
             <div key={point.title} className="flex gap-4">
@@ -38,9 +41,12 @@ export function WhyUse() {
                 <span />
                 <span />
               </span>
+
               <div>
                 <h3 className="font-semibold text-ink">{point.title}</h3>
-                <p className="mt-1 text-sm text-ink/60">{point.description}</p>
+                <p className="mt-1 text-sm text-ink/60">
+                  {point.description}
+                </p>
               </div>
             </div>
           ))}

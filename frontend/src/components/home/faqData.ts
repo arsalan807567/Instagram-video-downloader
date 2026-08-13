@@ -7,44 +7,46 @@ export const faqItems: FaqItem[] = [
   {
     question: "What is an Instagram video downloader?",
     answer:
-      "It's a tool that lets you save a copy of a public Instagram video or reel directly to your device, by pasting the post's URL.",
+      "An Instagram video downloader is an online tool that lets you download a copy of a publicly accessible Instagram video to your device by pasting the video's URL.",
   },
   {
     question: "How do I download an Instagram video?",
     answer:
-      "Copy the link to a public video or reel from Instagram, paste it into the box on this page, click Download, then choose a quality and click Download again.",
+      "Copy the link to a public Instagram video or Reel, paste it into the downloader, click Download, choose an available video quality, and download the file to your device.",
   },
   {
-    question: "Can I download a private Instagram video?",
+    question: "What Instagram content is supported?",
     answer:
-      "No. This tool only works with publicly accessible content and does not access private accounts or bypass any privacy settings.",
+      "Public Instagram videos and Reels are supported. Private accounts and content that is not publicly accessible are not supported.",
   },
   {
     question: "Do I need an Instagram account?",
-    answer: "No account or login is required to use this tool.",
+    answer:
+      "No. You do not need to create an account or log in to use this downloader for publicly accessible Instagram content.",
+  },
+  {
+    question: "Can I download an Instagram Reel?",
+    answer:
+      "Yes. Public Instagram Reels are supported. Copy the Reel link, paste it into the downloader, and choose from the available video qualities.",
   },
   {
     question: "Can I choose the video quality?",
     answer:
-      "Yes, when more than one resolution is available for a video you can pick between them, such as 360p, 480p, 720p, or 1080p.",
+      "Yes. If multiple video resolutions are available, you can choose from the qualities provided for that specific video, such as 360p, 480p, 720p, or 1080p.",
   },
   {
-    question: "Can I download an Instagram Reel?",
-    answer: "Yes, public reels are supported the same way as regular videos.",
-  },
-  {
-    question: "Can I use this on iPhone?",
+    question: "Can I download a private Instagram video?",
     answer:
-      "Yes, the site works in any modern mobile browser on iPhone, and downloaded files are saved through your browser's normal download flow.",
+      "No. This downloader only works with publicly accessible Instagram content and does not access private accounts or bypass privacy settings.",
   },
   {
-    question: "Can I use this on Android?",
+    question: "Can I use the downloader on iPhone or Android?",
     answer:
-      "Yes, it works the same way in any modern Android browser.",
+      "Yes. The downloader works in modern mobile browsers on both iPhone and Android. Your browser handles the downloaded file using its normal download process.",
   },
   {
     question: "Where are downloaded videos saved?",
     answer:
-      "Files are saved to your device's default downloads location, the same place any file downloaded from your browser would go.",
+      "Files are saved to your device's default downloads location, the same place other files downloaded through your browser are normally stored.",
   },
 ];
