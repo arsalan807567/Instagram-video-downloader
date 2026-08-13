@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { Turnstile } from "@marsidev/react-turnstile";
+import { FormEvent, useRef, useState } from "react";
+import { Turnstile, TurnstileInstance } from "@marsidev/react-turnstile";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "./LoadingState";
@@ -19,6 +19,7 @@ export function DownloaderForm() {
   });
   const [hasStartedTyping, setHasStartedTyping] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileInstance | undefined>(undefined);
 
   const clientLooksValid =
     url.length === 0 || looksLikeInstagramUrl(url);
@@ -38,7 +39,10 @@ export function DownloaderForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({
+          url: url.trim(),
+          turnstileToken,
+        }),
       });
 
       const result: MediaResult = await response.json();
@@ -78,6 +82,9 @@ export function DownloaderForm() {
         status: "error",
         result,
       });
+    } finally {
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
     }
   }
 
@@ -137,6 +144,7 @@ export function DownloaderForm() {
 
       <div className="mt-3">
         <Turnstile
+          ref={turnstileRef}
           siteKey={
             process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!
           }

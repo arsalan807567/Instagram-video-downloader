@@ -24,7 +24,8 @@ export type MediaErrorCode =
   | "media_unavailable"
   | "provider_error"
   | "timeout"
-  | "rate_limited";
+  | "rate_limited"
+  | "captcha_failed";
 
 export interface NormalizedError {
   success: false;

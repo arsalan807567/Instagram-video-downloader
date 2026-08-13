@@ -9,6 +9,7 @@ const MESSAGES: Record<MediaErrorCode, string> = {
     "We're having trouble retrieving this video right now. Please try again shortly.",
   timeout: "This is taking longer than expected. Please try again.",
   rate_limited: "Too many requests. Please wait a moment and try again.",
+  captcha_failed: "Verification failed. Please refresh the page and try again.",
 };
 
 export function ErrorState({ code }: { code: MediaErrorCode }) {

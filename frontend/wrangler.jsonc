@@ -3,7 +3,9 @@
   "name": "instagram-downloader",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-08-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -16,6 +18,7 @@
     "RATE_LIMIT_MAX_REQUESTS": "10",
     "MAX_REQUEST_BYTES": "2000",
     "PROVIDER_TIMEOUT_MS": "10000",
-    "NEXT_PUBLIC_ADS_ENABLED": "false"
+    "NEXT_PUBLIC_ADS_ENABLED": "false",
+    "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAEPNm0vYF72AEUwr"
   }
 }

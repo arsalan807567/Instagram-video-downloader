@@ -72,6 +72,14 @@ export async function POST(request: NextRequest) {
       ? (body as { url: string }).url
       : undefined;
 
+  const turnstileToken =
+    typeof body === "object" &&
+    body !== null &&
+    "turnstileToken" in body &&
+    typeof (body as { turnstileToken: unknown }).turnstileToken === "string"
+      ? (body as { turnstileToken: string }).turnstileToken
+      : undefined;
+
   if (typeof url !== "string") {
     return NextResponse.json(
       {
@@ -91,6 +99,61 @@ export async function POST(request: NextRequest) {
         message: "Please enter a valid Instagram URL.",
       },
       { status: 400 },
+    );
+  }
+
+  // Bot verification (Cloudflare Turnstile)
+  const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+
+  if (turnstileSecret) {
+    if (!turnstileToken) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "captcha_failed",
+          message: "Verification failed. Please refresh the page and try again.",
+        },
+        { status: 403 },
+      );
+    }
+
+    try {
+      const verifyResponse = await fetch(
+        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            secret: turnstileSecret,
+            response: turnstileToken,
+            remoteip: identifier !== "unknown" ? identifier : undefined,
+          }),
+          signal: AbortSignal.timeout(5000),
+        },
+      );
+
+      const verifyResult = (await verifyResponse.json()) as {
+        success: boolean;
+      };
+
+      if (!verifyResult.success) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "captcha_failed",
+            message: "Verification failed. Please refresh the page and try again.",
+          },
+          { status: 403 },
+        );
+      }
+    } catch {
+      // Turnstile's own service being unreachable shouldn't take the whole
+      // downloader down - log and let the request through.
+      console.error("Turnstile verification request failed");
+    }
+  } else {
+    console.warn(
+      "TURNSTILE_SECRET_KEY not set - skipping captcha verification.",
     );
   }
 
