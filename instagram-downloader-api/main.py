@@ -25,8 +25,14 @@ MAX_FILE_SIZE_MB = 500
 
 FRONTEND_URL = os.getenv(
     "FRONTEND_URL",
-    "https://instagram-video-downloader-iota-six.vercel.app",
+    "https://reelfetch.online",
 )
+
+# Supports a comma-separated list so you can allow the apex domain,
+# www subdomain, and a staging URL at the same time without code changes.
+ALLOWED_ORIGINS = [
+    origin.strip() for origin in FRONTEND_URL.split(",") if origin.strip()
+]
 
 ALLOWED_INSTAGRAM_HOSTS = {
     "instagram.com",
@@ -51,9 +57,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        FRONTEND_URL,
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
