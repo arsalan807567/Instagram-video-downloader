@@ -30,7 +30,7 @@ const siteUrl =
 export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL ??
-      "https://instagram-video-downloader-iota-six.vercel.app",
+      "https://reelfetch.online",
   ),
   title: {
     default: "Instagram Video Downloader - Download Instagram Videos Free",

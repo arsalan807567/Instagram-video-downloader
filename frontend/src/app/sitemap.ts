@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
-  "https://instagram-video-downloader-iota-six.vercel.app";
+  "https://reelfetch.online";
 
 const routes = [
   { path: "", priority: 1.0, frequency: "weekly" as const },
