@@ -59,8 +59,8 @@ export function Footer() {
           <div>
             <h2 className="text-sm font-semibold text-ink">Contact</h2>
             <p className="mt-3 text-sm text-ink/60">
-              <a href="mailto:hello@example.com" className="hover:text-signal">
-                hello@example.com
+              <a href="mailto:arslankhan807567@gmail.com" className="hover:text-signal">
+                arslankhan807567@gmail.com
               </a>
             </p>
           </div>

@@ -2,11 +2,18 @@ import Link from "next/link";
 import { Logo } from "./Logo";
 import { MobileMenu } from "./MobileMenu";
 
+const CONTACT_EMAIL = "arslankhan807567@gmail.com";
+
 const navLinks = [
   { href: "/instagram-video-downloader", label: "Video Downloader" },
   { href: "/instagram-reels-downloader", label: "Reels Downloader" },
   { href: "/how-to-download-instagram-videos", label: "How It Works" },
   { href: "/faq", label: "FAQ" },
+];
+
+const mobileLinks = [
+  ...navLinks,
+  { href: `mailto:${CONTACT_EMAIL}`, label: "Contact" },
 ];
 
 export function Header() {
@@ -27,8 +34,14 @@ export function Header() {
               {link.label}
             </Link>
           ))}
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="rounded-lg bg-signal px-4 py-2 text-sm font-medium text-white transition-colors hover:bz-signal/90"
+          >
+            Contact
+          </a>
         </nav>
-        <MobileMenu links={navLinks} />
+        <MobileMenu links={mobileLinks} />
       </div>
     </header>
   );
