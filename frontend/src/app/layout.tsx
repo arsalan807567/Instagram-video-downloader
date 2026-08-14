@@ -33,12 +33,13 @@ export const metadata: Metadata = {
       "https://reelfetch.online",
   ),
   title: {
-    default: "Instagram Video Downloader - Download Instagram Videos Free",
-    template: "%s | Instagram Video Downloader",
+    default: "Reelfetch - Free Instagram Video & Reels Downloader",
+    template: "%s | Reelfetch",
   },
   description:
-    "Download public Instagram videos and Reels online for free. Paste an Instagram URL, choose the available video quality, and download without logging in.",
+    "Download public Instagram videos and Reels online for free with Reelfetch. Paste an Instagram URL, choose the available video quality, and download without logging in.",
   keywords: [
+    "reelfetch",
     "instagram video downloader",
     "instagram downloader",
     "instagram reels downloader",
@@ -46,22 +47,22 @@ export const metadata: Metadata = {
     "download instagram reels",
     "instagram video download",
   ],
-  applicationName: "Instagram Video Downloader",
+  applicationName: "Reelfetch",
   category: "utilities",
   alternates: {
     canonical: "./",
   },
   openGraph: {
     type: "website",
-    siteName: "Instagram Video Downloader",
-    title: "Instagram Video Downloader - Download Instagram Videos Free",
+    siteName: "Reelfetch",
+    title: "Reelfetch - Free Instagram Video & Reels Downloader",
     description:
       "Download public Instagram videos and Reels online for free. No login required.",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Instagram Video Downloader - Free Online Downloader",
+    title: "Reelfetch - Free Instagram Video Downloader",
     description:
       "Download public Instagram videos and Reels online. No login required.",
   },
@@ -86,7 +87,7 @@ const structuredData = {
       "@type": "WebSite",
       "@id": `${siteUrl}/#website`,
       url: siteUrl,
-      name: "Instagram Video Downloader",
+      name: "Reelfetch",
       description:
         "Download public Instagram videos and Reels online for free.",
       inLanguage: "en",
@@ -94,7 +95,7 @@ const structuredData = {
     {
       "@type": "Organization",
       "@id": `${siteUrl}/#organization`,
-      name: "Instagram Video Downloader",
+      name: "Reelfetch",
       url: siteUrl,
     },
   ],
@@ -109,20 +110,6 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <script
-          async
-          src="https://www.googletagmanager.com/gtag/js?id=G-LP3WK2H04J"
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', 'G-LP3WK2H04J');
-            `,
-          }}
-        />
-        <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(structuredData),
@@ -132,7 +119,7 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} ${plexMono.variable} antialiased flex min-h-screen flex-col`}
       >
-        <a
+        
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-signal focus:px-4 focus:py-2 focus:text-white"
         >
