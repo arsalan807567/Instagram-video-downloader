@@ -12,6 +12,7 @@
   },
   "vars": {
     "NEXT_PUBLIC_APP_ENV": "production",
+    "NEXT_PUBLIC_GA_MEASUREMENT_ID": "G-LP3WK2H04J",
     "MEDIA_PROVIDER": "fastapi",
     "FASTAPI_URL": "https://instagram-video-downloader-y1cb.onrender.com",
     "RATE_LIMIT_WINDOW_MS": "60000",
