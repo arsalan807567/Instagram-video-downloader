@@ -11,11 +11,29 @@ export async function GET(request: NextRequest) {
   const formatId =
     request.nextUrl.searchParams.get("format_id");
 
+  const ticketId =
+    request.nextUrl.searchParams.get("ticket_id");
+
   if (!instagramUrl) {
     return new Response(
       JSON.stringify({
         success: false,
         message: "Missing Instagram URL.",
+      }),
+      {
+        status: 400,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
+    );
+  }
+
+  if (!ticketId) {
+    return new Response(
+      JSON.stringify({
+        success: false,
+        message: "Missing download ticket. Please try again.",
       }),
       {
         status: 400,
@@ -37,6 +55,11 @@ export async function GET(request: NextRequest) {
         formatId,
       );
     }
+
+    backendUrl.searchParams.set(
+      "ticket_id",
+      ticketId,
+    );
 
     const response = await fetch(
       backendUrl.toString(),
@@ -61,10 +84,20 @@ export async function GET(request: NextRequest) {
         errorText,
       );
 
+      let detailMessage: string | undefined;
+
+      try {
+        const parsed = JSON.parse(errorText) as { detail?: string };
+        detailMessage = parsed.detail;
+      } catch {
+        // errorText wasn't JSON - fall through to the generic message
+      }
+
       return new Response(
         JSON.stringify({
           success: false,
           message:
+            detailMessage ??
             "Unable to download this video right now.",
         }),
         {
