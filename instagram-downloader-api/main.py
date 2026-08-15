@@ -1,7 +1,10 @@
+import asyncio
+import itertools
 import os
 import re
 import shutil
 import tempfile
+import time
 import uuid
 from pathlib import Path
 from urllib.parse import urlparse
@@ -11,7 +14,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, HttpUrl
-from starlette.background import BackgroundTask
+from starlette.background import BackgroundTask, BackgroundTasks
 
 
 # ============================================================
@@ -39,6 +42,21 @@ ALLOWED_INSTAGRAM_HOSTS = {
     "www.instagram.com",
 }
 
+# How many actual video downloads (the heavy step - real file
+# generation/streaming) can run at the same time. Everyone past this
+# limit waits in a queue instead of piling onto the server at once.
+MAX_CONCURRENT_DOWNLOADS = int(
+    os.getenv("MAX_CONCURRENT_DOWNLOADS", "5")
+)
+
+# Once a ticket becomes "ready", the client has this long to actually
+# start the download before the slot is handed to the next person.
+TICKET_READY_GRACE_SECONDS = 30
+
+# Safety net: a ticket that's been "waiting" for longer than this is
+# assumed abandoned (closed tab, etc.) and is dropped.
+TICKET_WAITING_EXPIRE_SECONDS = 300
+
 
 # ============================================================
 # FASTAPI
@@ -62,6 +80,190 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+# ============================================================
+# DOWNLOAD QUEUE
+# ============================================================
+#
+# A lightweight, in-memory FIFO queue that caps how many real video
+# downloads run at once. This is intentionally simple (a dict + a
+# list, guarded by one asyncio.Lock) rather than an external queue
+# service, because the backend runs as a single instance - all the
+# state that matters lives in this one process already.
+#
+# Lifecycle of a ticket:
+#   waiting  -> created, sitting in line behind others
+#   ready    -> a slot opened up; client has a grace window to use it
+#   (removed) -> either consumed by a real download, or expired/abandoned
+#
+# _active_downloads counts tickets currently "ready" or in-flight -
+# both cases occupy a slot, so both count against the concurrency cap.
+
+_queue_lock = asyncio.Lock()
+_ticket_counter = itertools.count(1)
+_tickets: dict[str, dict] = {}
+_ticket_order: list[str] = []
+_active_downloads = 0
+
+
+def _make_ticket_id() -> str:
+    return f"t{next(_ticket_counter)}_{uuid.uuid4().hex[:8]}"
+
+
+async def _promote_waiting_tickets_locked() -> None:
+    """Hand free slots to the next people in line. Caller must hold _queue_lock."""
+
+    global _active_downloads
+
+    while _ticket_order and _active_downloads < MAX_CONCURRENT_DOWNLOADS:
+        ticket_id = _ticket_order.pop(0)
+        ticket = _tickets.get(ticket_id)
+
+        if ticket is None:
+            continue
+
+        ticket["status"] = "ready"
+        ticket["ready_at"] = time.time()
+        _active_downloads += 1
+
+
+async def _cleanup_expired_tickets_locked() -> None:
+    """Drop abandoned tickets and free up their slots. Caller must hold _queue_lock."""
+
+    global _active_downloads
+
+    now = time.time()
+    expired_ids = []
+
+    for ticket_id, ticket in _tickets.items():
+        if (
+            ticket["status"] == "waiting"
+            and now - ticket["created"] > TICKET_WAITING_EXPIRE_SECONDS
+        ):
+            expired_ids.append(ticket_id)
+        elif (
+            ticket["status"] == "ready"
+            and now - ticket["ready_at"] > TICKET_READY_GRACE_SECONDS
+        ):
+            expired_ids.append(ticket_id)
+
+    for ticket_id in expired_ids:
+        ticket = _tickets.pop(ticket_id, None)
+
+        if ticket is None:
+            continue
+
+        if ticket_id in _ticket_order:
+            _ticket_order.remove(ticket_id)
+
+        if ticket["status"] == "ready":
+            _active_downloads = max(0, _active_downloads - 1)
+
+    if expired_ids:
+        await _promote_waiting_tickets_locked()
+
+
+async def queue_join() -> dict:
+    """Register a new ticket and return its starting position."""
+
+    async with _queue_lock:
+        await _cleanup_expired_tickets_locked()
+
+        ticket_id = _make_ticket_id()
+
+        _tickets[ticket_id] = {
+            "status": "waiting",
+            "created": time.time(),
+            "ready_at": None,
+        }
+        _ticket_order.append(ticket_id)
+
+        await _promote_waiting_tickets_locked()
+
+        ticket = _tickets[ticket_id]
+
+        if ticket["status"] == "ready":
+            position = 0
+        else:
+            position = _ticket_order.index(ticket_id)
+
+        return {
+            "ticket_id": ticket_id,
+            "status": ticket["status"],
+            "position": position,
+        }
+
+
+async def queue_status(ticket_id: str) -> dict:
+    """Look up the current status and live position of a ticket."""
+
+    async with _queue_lock:
+        await _cleanup_expired_tickets_locked()
+
+        ticket = _tickets.get(ticket_id)
+
+        if ticket is None:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "This download slot has expired. "
+                    "Please try again."
+                ),
+            )
+
+        if ticket["status"] == "waiting":
+            position = _ticket_order.index(ticket_id)
+        else:
+            position = 0
+
+        return {
+            "ticket_id": ticket_id,
+            "status": ticket["status"],
+            "position": position,
+        }
+
+
+async def queue_release(ticket_id: str) -> None:
+    """Free up a ticket's slot once its download has finished (or failed)."""
+
+    global _active_downloads
+
+    async with _queue_lock:
+        ticket = _tickets.pop(ticket_id, None)
+
+        if ticket is not None:
+            if ticket_id in _ticket_order:
+                _ticket_order.remove(ticket_id)
+
+            if ticket["status"] == "ready":
+                _active_downloads = max(0, _active_downloads - 1)
+
+        await _promote_waiting_tickets_locked()
+
+
+async def queue_require_ready_ticket(ticket_id: str | None) -> None:
+    """Validate a ticket is actually this caller's turn before doing real work."""
+
+    if not ticket_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing download ticket. Please try again.",
+        )
+
+    async with _queue_lock:
+        await _cleanup_expired_tickets_locked()
+
+        ticket = _tickets.get(ticket_id)
+
+        if ticket is None or ticket["status"] != "ready":
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Your download slot expired or isn't ready yet. "
+                    "Please try again."
+                ),
+            )
 
 
 # ============================================================
@@ -167,11 +369,7 @@ def find_video_file(directory: str) -> Path | None:
 # YT-DLP INFORMATION
 # ============================================================
 
-def extract_media_info(instagram_url: str) -> dict:
-    """
-    Extract metadata without downloading the video.
-    """
-
+def _extract_media_info_sync(instagram_url: str) -> dict:
     ydl_options = {
         "quiet": True,
         "no_warnings": True,
@@ -180,12 +378,29 @@ def extract_media_info(instagram_url: str) -> dict:
         "extract_flat": False,
     }
 
+    with yt_dlp.YoutubeDL(ydl_options) as ydl:
+        return ydl.extract_info(
+            instagram_url,
+            download=False,
+        )
+
+
+async def extract_media_info(instagram_url: str) -> dict:
+    """
+    Extract metadata without downloading the video.
+
+    Runs in a worker thread (asyncio.to_thread) instead of directly on
+    the event loop - yt-dlp's extract_info() is a blocking call, and
+    running it inline would freeze every other request on this server
+    (metadata lookups, health checks, everything) for as long as it
+    takes to talk to Instagram.
+    """
+
     try:
-        with yt_dlp.YoutubeDL(ydl_options) as ydl:
-            info = ydl.extract_info(
-                instagram_url,
-                download=False,
-            )
+        info = await asyncio.to_thread(
+            _extract_media_info_sync,
+            instagram_url,
+        )
 
         if not info:
             raise HTTPException(
@@ -336,6 +551,36 @@ async def health():
 
 
 # ============================================================
+# DOWNLOAD QUEUE ROUTES
+# ============================================================
+
+@app.post("/api/queue/join")
+async def queue_join_route():
+    """
+    Claim a spot in line for a real video download.
+
+    Returns immediately with a ticket_id, a status ("ready" if a slot
+    was free, otherwise "waiting"), and a position (how many people
+    are ahead in line - 0 means it's already your turn).
+    """
+
+    return await queue_join()
+
+
+@app.get("/api/queue/status")
+async def queue_status_route(
+    ticket_id: str = Query(
+        max_length=100,
+    ),
+):
+    """
+    Poll the live position and status of a ticket.
+    """
+
+    return await queue_status(ticket_id)
+
+
+# ============================================================
 # MEDIA INFORMATION
 # ============================================================
 
@@ -354,7 +599,7 @@ async def media_info(
         instagram_url
     )
 
-    info = extract_media_info(
+    info = await extract_media_info(
         instagram_url
     )
 
@@ -397,6 +642,14 @@ async def media_info(
 # VIDEO DOWNLOAD
 # ============================================================
 
+def _run_download_sync(instagram_url: str, ydl_options: dict) -> dict | None:
+    with yt_dlp.YoutubeDL(ydl_options) as ydl:
+        return ydl.extract_info(
+            instagram_url,
+            download=True,
+        )
+
+
 @app.post("/api/download")
 async def download_video(
     request: DownloadRequest,
@@ -404,9 +657,18 @@ async def download_video(
         default=None,
         max_length=100,
     ),
+    ticket_id: str | None = Query(
+        default=None,
+        max_length=100,
+    ),
 ):
     """
     Download a publicly accessible Instagram video.
+
+    Requires a queue ticket obtained from POST /api/queue/join and
+    confirmed "ready" via GET /api/queue/status - this is the heavy
+    step (real file generation + streaming), so it's the one gated by
+    the concurrency limit.
 
     Temporary files are automatically deleted after
     the response has completed.
@@ -418,11 +680,13 @@ async def download_video(
         instagram_url
     )
 
+    await queue_require_ready_ticket(ticket_id)
+
     # --------------------------------------------------------
     # Retrieve metadata first
     # --------------------------------------------------------
 
-    info = extract_media_info(
+    info = await extract_media_info(
         instagram_url
     )
 
@@ -499,28 +763,28 @@ async def download_video(
 
     try:
         # ----------------------------------------------------
-        # Download
+        # Download (offloaded to a thread - this is the slow,
+        # bandwidth-heavy step, and running it inline would
+        # freeze the event loop for every other request while
+        # this one video downloads)
         # ----------------------------------------------------
 
-        with yt_dlp.YoutubeDL(
-            ydl_options
-        ) as ydl:
+        info = await asyncio.to_thread(
+            _run_download_sync,
+            instagram_url,
+            ydl_options,
+        )
 
-            info = ydl.extract_info(
-                instagram_url,
-                download=True,
+        if not info:
+            raise HTTPException(
+                status_code=404,
+                detail="Unable to retrieve the video.",
             )
 
-            if not info:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Unable to retrieve the video.",
-                )
-
-            video_title = (
-                info.get("title")
-                or "instagram_video"
-            )
+        video_title = (
+            info.get("title")
+            or "instagram_video"
+        )
 
         # ----------------------------------------------------
         # Locate video
@@ -579,6 +843,16 @@ async def download_video(
         # Response
         # ----------------------------------------------------
 
+        finalize_tasks = BackgroundTasks()
+        finalize_tasks.add_task(
+            cleanup_directory,
+            temporary_directory,
+        )
+        finalize_tasks.add_task(
+            queue_release,
+            ticket_id,
+        )
+
         return FileResponse(
             path=str(video_file),
 
@@ -586,10 +860,7 @@ async def download_video(
 
             filename=safe_filename,
 
-            background=BackgroundTask(
-                cleanup_directory,
-                temporary_directory,
-            ),
+            background=finalize_tasks,
 
             headers={
                 "Content-Disposition": (
@@ -607,6 +878,7 @@ async def download_video(
         cleanup_directory(
             temporary_directory
         )
+        await queue_release(ticket_id)
 
         raise HTTPException(
             status_code=422,
@@ -621,6 +893,7 @@ async def download_video(
         cleanup_directory(
             temporary_directory
         )
+        await queue_release(ticket_id)
 
         raise
 
@@ -628,6 +901,7 @@ async def download_video(
         cleanup_directory(
             temporary_directory
         )
+        await queue_release(ticket_id)
 
         raise HTTPException(
             status_code=500,
@@ -649,6 +923,10 @@ async def download_video_get(
         default=None,
         max_length=100,
     ),
+    ticket_id: str | None = Query(
+        default=None,
+        max_length=100,
+    ),
 ):
     """
     Browser-friendly download endpoint.
@@ -661,6 +939,7 @@ async def download_video_get(
     return await download_video(
         request=request,
         format_id=format_id,
+        ticket_id=ticket_id,
     )
 
 
