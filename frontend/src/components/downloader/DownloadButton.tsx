@@ -16,12 +16,25 @@ interface DownloadButtonProps {
   contentType: NormalizedContentType;
 }
 
+type Phase = "idle" | "queued" | "downloading";
+
+// How long we'll keep polling the queue before giving up and
+// showing an error, rather than polling forever.
+const MAX_QUEUE_POLL_ATTEMPTS = 60;
+const QUEUE_POLL_INTERVAL_MS = 1500;
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function DownloadButton({
   quality,
   contentType,
 }: DownloadButtonProps) {
-  const [isDownloading, setIsDownloading] =
-    useState(false);
+  const [phase, setPhase] = useState<Phase>("idle");
+
+  const [queuePosition, setQueuePosition] =
+    useState<number | null>(null);
 
   const [progress, setProgress] = useState(0);
 
@@ -30,15 +43,86 @@ export function DownloadButton({
   );
 
   async function handleDownload() {
-    if (isDownloading) return;
+    if (phase !== "idle") return;
 
-    setIsDownloading(true);
-    setProgress(0);
     setError(null);
+    setProgress(0);
 
     try {
+      // ------------------------------------------------------
+      // 1. Claim a spot in the download queue
+      // ------------------------------------------------------
+
+      const joinResponse = await fetch("/api/queue/join", {
+        method: "POST",
+        cache: "no-store",
+      });
+
+      const joinData = await joinResponse.json();
+
+      if (!joinResponse.ok || !joinData.ticket_id) {
+        throw new Error(
+          joinData.message ??
+            "Unable to join the download queue. Please try again.",
+        );
+      }
+
+      const ticketId: string = joinData.ticket_id;
+      let status: string = joinData.status;
+      let position: number = joinData.position ?? 0;
+
+      // ------------------------------------------------------
+      // 2. If someone's ahead, wait and show a live position
+      // ------------------------------------------------------
+
+      if (status !== "ready") {
+        setPhase("queued");
+        setQueuePosition(position);
+
+        let attempts = 0;
+
+        while (status !== "ready" && attempts < MAX_QUEUE_POLL_ATTEMPTS) {
+          await wait(QUEUE_POLL_INTERVAL_MS);
+          attempts += 1;
+
+          const statusResponse = await fetch(
+            `/api/queue/status?ticket_id=${encodeURIComponent(ticketId)}`,
+            { cache: "no-store" },
+          );
+
+          const statusData = await statusResponse.json();
+
+          if (!statusResponse.ok) {
+            throw new Error(
+              statusData.message ??
+                "Your download slot expired. Please try again.",
+            );
+          }
+
+          status = statusData.status;
+          position = statusData.position ?? 0;
+          setQueuePosition(position);
+        }
+
+        if (status !== "ready") {
+          throw new Error(
+            "Still waiting for a free download slot. Please try again.",
+          );
+        }
+      }
+
+      // ------------------------------------------------------
+      // 3. It's our turn - start the actual (heavy) download
+      // ------------------------------------------------------
+
+      setPhase("downloading");
+      setQueuePosition(null);
+
+      const finalUrl =
+        `${quality.downloadUrl}&ticket_id=${encodeURIComponent(ticketId)}`;
+
       const response = await fetch(
-        quality.downloadUrl,
+        finalUrl,
         {
           method: "GET",
           cache: "no-store",
@@ -46,9 +130,18 @@ export function DownloadButton({
       );
 
       if (!response.ok) {
-        throw new Error(
-          `Download failed (${response.status})`,
-        );
+        let message = `Download failed (${response.status})`;
+
+        try {
+          const errorBody = await response.json();
+          if (errorBody?.message) {
+            message = errorBody.message;
+          }
+        } catch {
+          // response wasn't JSON - keep the generic message
+        }
+
+        throw new Error(message);
       }
 
       if (!response.body) {
@@ -149,7 +242,9 @@ export function DownloadButton({
       );
 
       setError(
-        "Download failed. Please try again.",
+        downloadError instanceof Error
+          ? downloadError.message
+          : "Download failed. Please try again.",
       );
 
       track("download_success", {
@@ -160,10 +255,27 @@ export function DownloadButton({
       });
     } finally {
       setTimeout(() => {
-        setIsDownloading(false);
+        setPhase("idle");
         setProgress(0);
+        setQueuePosition(null);
       }, 1200);
     }
+  }
+
+  const isBusy = phase !== "idle";
+
+  let buttonLabel = `Download ${quality.label}`;
+
+  if (phase === "queued") {
+    buttonLabel =
+      queuePosition && queuePosition > 0
+        ? `In queue - ${queuePosition} ahead of you`
+        : "Almost your turn...";
+  } else if (phase === "downloading") {
+    buttonLabel =
+      progress > 0
+        ? `Downloading ${progress}%`
+        : `Preparing ${quality.label}...`;
   }
 
   return (
@@ -171,18 +283,24 @@ export function DownloadButton({
       <Button
         size="lg"
         onClick={handleDownload}
-        disabled={isDownloading}
-        isLoading={isDownloading}
+        disabled={isBusy}
+        isLoading={isBusy}
         className="w-full sm:w-auto"
       >
-        {isDownloading
-          ? progress > 0
-            ? `Downloading ${progress}%`
-            : `Preparing ${quality.label}...`
-          : `Download ${quality.label}`}
+        {buttonLabel}
       </Button>
 
-      {isDownloading && (
+      {phase === "queued" && (
+        <p className="mt-2 text-xs text-ink/50">
+          {queuePosition && queuePosition > 0
+            ? `The server is busy right now - ${queuePosition} ${
+                queuePosition === 1 ? "person is" : "people are"
+              } ahead of you. Hang tight, this updates automatically.`
+            : "A slot is opening up for you..."}
+        </p>
+      )}
+
+      {phase === "downloading" && (
         <div
           className="mt-3 h-2 w-full overflow-hidden rounded-full bg-mist"
           role="progressbar"
@@ -202,7 +320,7 @@ export function DownloadButton({
         </div>
       )}
 
-      {isDownloading && (
+      {phase === "downloading" && (
         <p className="mt-2 text-xs text-ink/50">
           {progress > 0
             ? `${progress}% downloaded`
