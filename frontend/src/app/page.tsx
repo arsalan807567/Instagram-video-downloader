@@ -7,7 +7,7 @@ import { AdSlot } from "@/components/ads/AdSlot";
 
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
-  "https://instagram-video-downloader-iota-six.vercel.app";
+  "https://reelfetch.online";
 
 const structuredData = {
   "@context": "https://schema.org",
